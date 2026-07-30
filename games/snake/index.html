@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snake — Prototype</title>
+<link rel="stylesheet" href="../../shared/style.css">
+<style>
+  .stage {
+    padding: 40px 0 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+  }
+  #gameCanvas {
+    background: var(--ink);
+    border: 1px solid var(--grid-line);
+    image-rendering: pixelated;
+    max-width: 100%;
+  }
+  .hud {
+    display: flex;
+    gap: 28px;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--text-dim);
+  }
+  .hud b { color: var(--text); }
+  .controls {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(14,26,46,0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  .overlay.show { display: flex; }
+  .overlay .panel { text-align: center; max-width: 340px; }
+  .overlay h2 { color: var(--accent); margin-bottom: 10px; }
+  .overlay p { color: var(--text-dim); font-size: 0.9rem; margin: 10px 0 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <nav class="site-nav">
+    <div class="brand">GLEN McKNIGHT <span>// PROTOTYPES</span></div>
+    <a class="back" href="../../index.html">← all prototypes</a>
+  </nav>
+
+  <div class="stage">
+    <div class="eyebrow">Prototype 01 — Snake</div>
+    <div class="hud">
+      <div>SCORE <b id="score">0</b></div>
+      <div>BOARD <b id="boardSize">14 × 14</b></div>
+      <div>SPEED <b id="speedTier">1</b></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div class="controls">
+      Arrow keys / WASD to move · Space to pause<br>
+      Board grows every 5 food. Obstacles are fixed — plan around them.
+    </div>
+    <a class="btn ghost" href="writeup.html">Read the design log →</a>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="panel">
+    <h2 id="overlayTitle">Paused</h2>
+    <p id="overlayText">Press Space to resume.</p>
+    <button class="btn" id="overlayBtn">Resume</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   SNAKE PROTOTYPE
+   Structure: tunable variables → construction → update loop
+   ============================================================ */
+
+// ---- Tunable variables ----
+const CELL_SIZE = 24;
+const START_GRID = 14;          // starting board is START_GRID x START_GRID cells
+const MAX_GRID = 22;             // board stops growing here
+const GROWTH_INTERVAL = 5;       // board grows every N food eaten
+const BASE_TICK_MS = 140;        // starting step interval
+const MIN_TICK_MS = 70;          // fastest the game will ever get
+const SPEEDUP_PER_FOOD = 3;      // ms shaved off tick per food eaten
+const OBSTACLE_DENSITY = 0.05;   // fraction of cells that become obstacles on growth
+
+// ---- State ----
+let gridSize, cellPx, snake, dir, nextDir, food, obstacles;
+let score, tickMs, timer, paused, gameOver, foodEatenSinceGrowth;
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const boardSizeEl = document.getElementById('boardSize');
+const speedTierEl = document.getElementById('speedTier');
+const overlay = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlayTitle');
+const overlayText = document.getElementById('overlayText');
+const overlayBtn = document.getElementById('overlayBtn');
+
+// ---- Construction ----
+function init() {
+  gridSize = START_GRID;
+  cellPx = CELL_SIZE;
+  resizeCanvas();
+
+  const mid = Math.floor(gridSize / 2);
+  snake = [{x: mid - 1, y: mid}, {x: mid - 2, y: mid}, {x: mid - 3, y: mid}];
+  dir = {x: 1, y: 0};
+  nextDir = {x: 1, y: 0};
+  obstacles = [];
+  score = 0;
+  tickMs = BASE_TICK_MS;
+  paused = false;
+  gameOver = false;
+  foodEatenSinceGrowth = 0;
+
+  food = placeFood();
+  updateHud();
+  hideOverlay();
+
+  if (timer) clearInterval(timer);
+  timer = setInterval(update, tickMs);
+}
+
+function resizeCanvas() {
+  canvas.width = gridSize * cellPx;
+  canvas.height = gridSize * cellPx;
+}
+
+function resetTimer() {
+  clearInterval(timer);
+  timer = setInterval(update, tickMs);
+}
+
+// ---- Helpers ----
+function placeFood() {
+  let pos;
+  do {
+    pos = {x: rand(gridSize), y: rand(gridSize)};
+  } while (occupied(pos));
+  return pos;
+}
+
+function rand(n) { return Math.floor(Math.random() * n); }
+
+function occupied(pos) {
+  return snake.some(s => s.x === pos.x && s.y === pos.y) ||
+         obstacles.some(o => o.x === pos.x && o.y === pos.y) ||
+         (food && food.x === pos.x && food.y === pos.y);
+}
+
+function growBoard() {
+  if (gridSize >= MAX_GRID) return;
+  gridSize += 2;
+  resizeCanvas();
+
+  const newObstacleCount = Math.round(gridSize * gridSize * OBSTACLE_DENSITY);
+  for (let i = 0; i < newObstacleCount; i++) {
+    let pos;
+    let attempts = 0;
+    do {
+      pos = {x: rand(gridSize), y: rand(gridSize)};
+      attempts++;
+    } while (occupied(pos) && attempts < 50);
+    if (attempts < 50) obstacles.push(pos);
+  }
+}
+
+// ---- Update loop ----
+function update() {
+  if (paused || gameOver) return;
+
+  dir = nextDir;
+  const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+
+  // wall collision
+  if (head.x < 0 || head.y < 0 || head.x >= gridSize || head.y >= gridSize) {
+    return endGame('Hit the edge.');
+  }
+  // self collision
+  if (snake.some(s => s.x === head.x && s.y === head.y)) {
+    return endGame('Ran into yourself.');
+  }
+  // obstacle collision
+  if (obstacles.some(o => o.x === head.x && o.y === head.y)) {
+    return endGame('Hit an obstacle.');
+  }
+
+  snake.unshift(head);
+
+  if (head.x === food.x && head.y === food.y) {
+    score++;
+    foodEatenSinceGrowth++;
+    tickMs = Math.max(MIN_TICK_MS, tickMs - SPEEDUP_PER_FOOD);
+    resetTimer();
+
+    if (foodEatenSinceGrowth >= GROWTH_INTERVAL) {
+      foodEatenSinceGrowth = 0;
+      growBoard();
+    }
+    food = placeFood();
+    updateHud();
+  } else {
+    snake.pop();
+  }
+
+  render();
+}
+
+function endGame(reason) {
+  gameOver = true;
+  clearInterval(timer);
+  overlayTitle.textContent = 'Run over';
+  overlayText.textContent = reason + ' Score: ' + score + '. Press Space to try again.';
+  overlayBtn.textContent = 'Try again';
+  showOverlay();
+}
+
+function updateHud() {
+  scoreEl.textContent = score;
+  boardSizeEl.textContent = gridSize + ' × ' + gridSize;
+  speedTierEl.textContent = Math.max(1, Math.round((BASE_TICK_MS - tickMs) / SPEEDUP_PER_FOOD / 5) + 1);
+}
+
+function showOverlay() { overlay.classList.add('show'); }
+function hideOverlay() { overlay.classList.remove('show'); }
+
+// ---- Render ----
+function render() {
+  ctx.fillStyle = '#0E1A2E';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // grid
+  ctx.strokeStyle = '#1C3153';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= gridSize; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * cellPx, 0);
+    ctx.lineTo(i * cellPx, canvas.height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, i * cellPx);
+    ctx.lineTo(canvas.width, i * cellPx);
+    ctx.stroke();
+  }
+
+  // obstacles
+  ctx.fillStyle = '#24406A';
+  obstacles.forEach(o => {
+    ctx.fillRect(o.x * cellPx + 2, o.y * cellPx + 2, cellPx - 4, cellPx - 4);
+  });
+
+  // food
+  ctx.fillStyle = '#FF9F1C';
+  ctx.beginPath();
+  ctx.arc(food.x * cellPx + cellPx / 2, food.y * cellPx + cellPx / 2, cellPx / 2 - 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // snake
+  snake.forEach((seg, i) => {
+    ctx.fillStyle = i === 0 ? '#6FCF97' : '#4C9A72';
+    ctx.fillRect(seg.x * cellPx + 1, seg.y * cellPx + 1, cellPx - 2, cellPx - 2);
+  });
+}
+
+// ---- Input ----
+window.addEventListener('keydown', (e) => {
+  const key = e.key.toLowerCase();
+  if (key === ' ') {
+    e.preventDefault();
+    if (gameOver) { init(); return; }
+    paused = !paused;
+    if (paused) {
+      overlayTitle.textContent = 'Paused';
+      overlayText.textContent = 'Press Space to resume.';
+      overlayBtn.textContent = 'Resume';
+      showOverlay();
+    } else {
+      hideOverlay();
+    }
+    return;
+  }
+
+  const map = {
+    arrowup: {x:0,y:-1}, w: {x:0,y:-1},
+    arrowdown: {x:0,y:1}, s: {x:0,y:1},
+    arrowleft: {x:-1,y:0}, a: {x:-1,y:0},
+    arrowright: {x:1,y:0}, d: {x:1,y:0},
+  };
+  const d = map[key];
+  if (!d) return;
+  // prevent instant reversal
+  if (d.x === -dir.x && d.y === -dir.y) return;
+  nextDir = d;
+});
+
+overlayBtn.addEventListener('click', () => {
+  if (gameOver) { init(); return; }
+  paused = false;
+  hideOverlay();
+});
+
+init();
+render();
+</script>
+</body>
+</html>

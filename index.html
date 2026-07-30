@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glen McKnight — Game Design Prototypes</title>
+<link rel="stylesheet" href="shared/style.css">
+<style>
+  .hero {
+    padding: 64px 0 56px;
+  }
+  .hero h1 {
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    margin-top: 14px;
+    line-height: 1.15;
+  }
+  .hero p.lede {
+    font-family: var(--sans);
+    font-size: 1.05rem;
+    color: var(--text-dim);
+    max-width: 620px;
+    margin-top: 18px;
+  }
+  .philosophy {
+    margin-top: 28px;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--accent);
+    letter-spacing: 0.02em;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    padding: 40px 0 20px;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 220px;
+  }
+  .card .status {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ok);
+    margin-bottom: 10px;
+  }
+  .card .status.dev { color: var(--accent); }
+  .card .status.idea { color: var(--text-dim); }
+
+  .card h2 {
+    font-size: 1.3rem;
+  }
+  .card p.tagline {
+    color: var(--text-dim);
+    font-size: 0.92rem;
+    margin: 10px 0 20px;
+  }
+  .card .links {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .card.placeholder {
+    border-style: dashed;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 0.85rem;
+  }
+  .card.placeholder::before,
+  .card.placeholder::after { border-color: var(--grid-line); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <nav class="site-nav">
+    <div class="brand">GLEN McKNIGHT <span>// PROTOTYPES</span></div>
+    <a class="back" href="https://github.com/glencmcknight/AIPrototypes">repo ↗</a>
+  </nav>
+
+  <section class="hero">
+    <div class="eyebrow">Game Design Portfolio</div>
+    <h1>Small builds. Real questions.<br>Play, consider, repeat.</h1>
+    <p class="lede">
+      A working set of HTML prototypes exploring specific design questions —
+      each one built in small, testable chunks and documented with the
+      thinking behind it, not just the result.
+    </p>
+    <div class="philosophy">// build small → play → consider → expand</div>
+  </section>
+
+  <section class="grid">
+
+    <div class="panel card">
+      <div>
+        <div class="status">Active build</div>
+        <h2>Snake</h2>
+        <p class="tagline">
+          Revisiting a classic loop — obstacles, a growing playfield,
+          and an eye toward multi-screen exploration.
+        </p>
+      </div>
+      <div class="links">
+        <a class="btn" href="games/snake/index.html">Play</a>
+        <a class="btn ghost" href="games/snake/writeup.html">Design Log</a>
+      </div>
+    </div>
+
+    <div class="panel card placeholder">
+      Next prototype slot —<br>drop a new folder in <code>/games/</code>
+    </div>
+
+    <div class="panel card placeholder">
+      Next prototype slot
+    </div>
+
+    <div class="panel card placeholder">
+      Next prototype slot
+    </div>
+
+  </section>
+
+  <footer>
+    Built and iterated with Claude · structure documented in the repo README
+  </footer>
+
+</div>
+</body>
+</html>

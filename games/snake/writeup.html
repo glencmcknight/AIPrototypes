@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snake — Design Log</title>
+<link rel="stylesheet" href="../../shared/style.css">
+<style>
+  .header {
+    padding: 48px 0 20px;
+    max-width: 680px;
+  }
+  .header h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); margin-top: 12px; }
+  .header p.lede {
+    font-family: var(--sans);
+    color: var(--text-dim);
+    margin-top: 16px;
+    font-size: 1rem;
+  }
+
+  .meta-row {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-top: 24px;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+  .meta-row b { color: var(--text); display: block; font-size: 0.75rem; margin-bottom: 3px; }
+
+  .timeline {
+    padding: 40px 0 20px;
+    max-width: 720px;
+  }
+
+  .phase {
+    position: relative;
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 20px;
+    margin-bottom: 8px;
+  }
+
+  .phase-num {
+    font-family: var(--mono);
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+    padding-top: 4px;
+  }
+
+  .phase-line {
+    position: relative;
+  }
+  .phase-line::before {
+    content: "";
+    position: absolute;
+    left: 27px;
+    top: 44px;
+    bottom: -32px;
+    width: 1px;
+    background: var(--grid-line);
+  }
+  .phase:last-child .phase-line::before { display: none; }
+
+  .phase .panel {
+    margin-bottom: 32px;
+  }
+
+  .phase h3 { font-size: 1.05rem; margin-bottom: 10px; }
+  .phase p { color: var(--text-dim); font-size: 0.94rem; margin: 0 0 10px; }
+  .phase p:last-child { margin-bottom: 0; }
+  .phase .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ok);
+    border: 1px solid var(--ok);
+    border-radius: var(--radius);
+    padding: 3px 8px;
+    margin-bottom: 12px;
+  }
+  .phase.future .tag { color: var(--text-dim); border-color: var(--grid-line); }
+
+  .cta {
+    margin: 20px 0 60px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <nav class="site-nav">
+    <div class="brand">GLEN McKNIGHT <span>// PROTOTYPES</span></div>
+    <a class="back" href="../../index.html">← all prototypes</a>
+  </nav>
+
+  <section class="header">
+    <div class="eyebrow">Design Log — Prototype 01</div>
+    <h1>Snake: still full of opportunity</h1>
+    <p class="lede">
+      Snake is one of my all-time favorite games, and even decades later it
+      still feels like there's real room to expand and explore within its
+      simple ruleset. That made it a good first project for trying an
+      AI-assisted build — though honestly, the process felt a lot less like
+      "vibe coding" and a lot more like how I already build: small, testable
+      chunks, tunable variables, and a lot of playing what I've made before
+      deciding what comes next.
+    </p>
+    <div class="meta-row">
+      <div><b>Approach</b>Build small → play → consider → expand</div>
+      <div><b>Usually built in</b>Flash/ActionScript (past), Unreal Blueprint (now)</div>
+      <div><b>This build</b>HTML / Canvas, with Claude</div>
+    </div>
+  </section>
+
+  <section class="timeline">
+
+    <div class="phase">
+      <div class="phase-num">01</div>
+      <div class="phase-line">
+        <div class="panel">
+          <div class="tag">Shipped</div>
+          <h3>Get it functional, get it familiar</h3>
+          <p>
+            The very first step wasn't design — it was structure. Before
+            adding a single new idea, I wanted the underlying code to follow
+            patterns I already think in: a set of tunable variables up top,
+            a clear construction step, and an update loop I could reason
+            about. The AI was supportive of building it that way from the
+            start, which made everything after this step easier to trust.
+          </p>
+          <p>
+            The game itself just needed to play in the classic way —
+            no twists yet. Get the loop right before touching the design.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-num">02</div>
+      <div class="phase-line">
+        <div class="panel">
+          <div class="tag">Shipped</div>
+          <h3>Obstacles: interrupt the default loop</h3>
+          <p>
+            Standard Snake has one lever: it gets faster until your reaction
+            time can't keep up. That's a real addictive loop, but it's also
+            the only thing happening. Obstacles were the first real design
+            move — fixed shapes on the board that force you to navigate and
+            plan a route, rather than just react faster.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-num">03</div>
+      <div class="phase-line">
+        <div class="panel">
+          <div class="tag">Shipped</div>
+          <h3>A world that grows</h3>
+          <p>
+            The next thing I wanted to chase was a feeling I find endlessly
+            satisfying as a player: a world that grows and opens up. I'm an
+            explorer by nature, so a board that expands as you succeed felt
+            like the right next layer — more space, more obstacles, more
+            room to keep making decisions.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase future">
+      <div class="phase-num">04</div>
+      <div class="phase-line">
+        <div class="panel">
+          <div class="tag">Where I'd take it next</div>
+          <h3>Multi-screen, Sokoban-influenced exploration</h3>
+          <p>
+            The idea I'd like to chase further is a multi-screen world —
+            traveling from location to location, each one ever-growing, with
+            some problems borrowed from Sokoban-style block-pushing rather
+            than pure reflex play. That would turn Snake from a single
+            escalating loop into something closer to a small world to
+            explore and solve.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <div class="cta">
+    <a class="btn" href="index.html">Play the current build →</a>
+  </div>
+
+  <footer>
+    Built and iterated with Claude · part of the AIPrototypes portfolio
+  </footer>
+
+</div>
+</body>
+</html>
