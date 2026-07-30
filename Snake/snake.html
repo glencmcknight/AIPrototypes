@@ -5,15 +5,16 @@
 <title>SNAKE // terminal prototype</title>
 <style>
   :root{
-    --bg: #0a0e0a;
-    --panel: #0f1710;
-    --grid-line: #132014;
-    --phosphor: #4dff88;
-    --phosphor-dim: #1f7a44;
-    --phosphor-bright: #b6ffcf;
-    --amber: #ffb454;
-    --danger: #ff5c5c;
+    --bg: #0c0c0e;
+    --panel: #151316;
+    --grid-line: #2a1620;
+    --phosphor: #ff1f6d;
+    --phosphor-dim: #7a1338;
+    --phosphor-bright: #fff200;
+    --amber: #fff200;
+    --danger: #ff2b2b;
     --font-mono: 'Courier New', ui-monospace, Menlo, Consolas, monospace;
+    --font-punk: 'Arial Black', 'Impact', Haettenschweiler, sans-serif;
   }
   * { box-sizing: border-box; }
   html, body{
@@ -25,7 +26,7 @@
     position:relative; width: 620px; max-width: 94vw;
     padding: 22px 24px 26px; background: var(--panel);
     border: 1px solid var(--phosphor-dim); border-radius: 4px;
-    box-shadow: 0 0 0 1px rgba(77,255,136,0.05), 0 0 40px rgba(77,255,136,0.08), inset 0 0 60px rgba(0,0,0,0.6);
+    box-shadow: 0 0 0 1px rgba(255,31,109,0.08), 0 0 40px rgba(255,31,109,0.12), inset 0 0 60px rgba(0,0,0,0.6);
   }
   .terminal::before{
     content:""; position:absolute; inset:0; pointer-events:none;
@@ -33,7 +34,7 @@
     border-radius: 4px; mix-blend-mode: multiply;
   }
   .topline{ display:flex; justify-content:space-between; align-items:baseline; font-size:12px; letter-spacing: 0.08em; color: var(--phosphor-dim); margin-bottom: 6px; text-transform: uppercase; }
-  h1{ margin: 0 0 2px; font-size: 22px; letter-spacing: 0.12em; color: var(--phosphor-bright); text-shadow: 0 0 8px rgba(77,255,136,0.5); }
+  h1{ margin: 0 0 2px; font-family: var(--font-punk); font-size: 26px; letter-spacing: 0.06em; color: var(--phosphor-bright); text-shadow: 2px 2px 0 var(--phosphor), -1px -1px 0 rgba(0,0,0,0.6); transform: skew(-4deg); }
   .subtitle{ font-size: 11px; color: var(--phosphor-dim); margin-bottom: 16px; letter-spacing: 0.04em; }
   .hud{ display:flex; justify-content:space-between; align-items:center; font-size: 13px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed var(--grid-line); }
   .hud span.label{ color: var(--phosphor-dim); }
@@ -41,8 +42,7 @@
   #best.value{ color: var(--amber); }
   canvas{
     display:block; width: 100%; aspect-ratio: 1 / 1;
-    background: linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 28px 28px,
-                linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 28px 28px, #060906;
+    background-color: #060906;
     border: 1px solid var(--grid-line); border-radius: 2px; image-rendering: pixelated;
   }
   .footline{ display:flex; justify-content:space-between; margin-top: 12px; font-size: 11px; color: var(--phosphor-dim); letter-spacing: 0.03em; }
@@ -52,14 +52,14 @@
   }
   .overlay.show{ display:flex; }
   .overlay h2{ margin:0; font-size: 20px; letter-spacing:0.1em; color: var(--danger); text-shadow: 0 0 10px rgba(255,92,92,0.5); }
-  .overlay.start h2{ color: var(--phosphor-bright); text-shadow: 0 0 10px rgba(77,255,136,0.5); }
+  .overlay.start h2{ color: var(--phosphor-bright); text-shadow: 0 0 10px rgba(255,242,0,0.5); }
   .overlay p{ margin:0; font-size: 12px; color: var(--phosphor-dim); max-width: 320px; line-height:1.6; }
   .key{ display:inline-block; border: 1px solid var(--phosphor-dim); border-radius: 3px; padding: 1px 6px; color: var(--phosphor-bright); font-size: 11px; }
   button.go{
     margin-top: 6px; background: transparent; border: 1px solid var(--phosphor); color: var(--phosphor-bright);
     font-family: var(--font-mono); letter-spacing: 0.08em; font-size: 12px; padding: 8px 18px; border-radius: 3px; cursor: pointer; text-transform: uppercase;
   }
-  button.go:hover{ background: rgba(77,255,136,0.1); box-shadow: 0 0 12px rgba(77,255,136,0.25); }
+  button.go:hover{ background: rgba(255,31,109,0.15); box-shadow: 0 0 12px rgba(255,31,109,0.35); }
   @media (max-width: 480px){ h1{ font-size:18px; } .hud{ font-size: 12px; } }
 </style>
 </head>
@@ -117,7 +117,7 @@
    ========================================================================= */
 
 // ---- 1. CONFIG -----------------------------------------------------------
-const GRID_SIZE      = 14;
+const GRID_SIZE      = 20;
 const CELL           = 28;
 const START_LENGTH   = 3;
 const BASE_TICK_MS   = 140;
@@ -130,6 +130,8 @@ const ctx = canvas.getContext('2d');
 canvas.width = GRID_SIZE * CELL;
 canvas.height = GRID_SIZE * CELL;
 document.getElementById('gridInfo').textContent = GRID_SIZE + '\u00d7' + GRID_SIZE;
+
+const GRID_LINE_COLOR = getComputedStyle(document.documentElement).getPropertyValue('--grid-line').trim();
 
 const scoreEl = document.getElementById('score');
 const bestEl  = document.getElementById('best');
@@ -279,17 +281,32 @@ function renderLoop(){
 
 function draw(){
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawGrid();
   if (!state) return;
 
-  drawCell(state.food.x, state.food.y, '#ffb454', true);
+  drawCell(state.food.x, state.food.y, '#fff200', true);
 
   state.snake.forEach(function(seg, i){
     const isHead = i === 0;
     const t = i / Math.max(1, state.snake.length - 1);
     const alpha = 1 - t * 0.55;
-    const color = isHead ? '#b6ffcf' : ('rgba(77,255,136,' + alpha + ')');
+    const color = isHead ? '#fff200' : ('rgba(255,31,109,' + alpha + ')');
     drawCell(seg.x, seg.y, color, false);
   });
+}
+
+function drawGrid(){
+  ctx.strokeStyle = GRID_LINE_COLOR;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i <= GRID_SIZE; i++){
+    const p = i * CELL + 0.5;
+    ctx.moveTo(p, 0);
+    ctx.lineTo(p, canvas.height);
+    ctx.moveTo(0, p);
+    ctx.lineTo(canvas.width, p);
+  }
+  ctx.stroke();
 }
 
 function drawCell(gx, gy, color, glow){
