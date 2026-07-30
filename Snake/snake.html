@@ -115,12 +115,14 @@
    a collision check." The vocabulary changes between engines; the shape
    of the problem does not.
 
-   Five systems, present in nearly every 2D game you'll ever prototype:
+   Six systems, present in nearly every 2D game you'll ever prototype:
      1. CONFIG    - tunable numbers, kept separate from logic
      2. STATE     - the data that fully describes "what's happening now"
-     3. INPUT     - reading intent, decoupled from actually moving
-     4. UPDATE    - turning input + time into new state (the game loop)
-     5. RENDER    - drawing the current state, and only the current state
+     3. AUDIO     - sound generation, triggered as a side effect of state
+                    changes (see the playXSfx() calls sprinkled through UPDATE)
+     4. INPUT     - reading intent, decoupled from actually moving
+     5. UPDATE    - turning input + time into new state (the game loop)
+     6. RENDER    - drawing the current state, and only the current state
    ========================================================================= */
 
 // ---- 1. CONFIG -----------------------------------------------------------
@@ -144,6 +146,8 @@ const SNAKE_HEAD_COLOR = rootStyle.getPropertyValue('--phosphor-bright').trim();
 const SNAKE_BODY_COLOR = rootStyle.getPropertyValue('--phosphor').trim();
 const FOOD_COLOR = rootStyle.getPropertyValue('--amber').trim();
 
+// Used by RENDER to fade the snake's body toward its tail; lives here next
+// to the color constants it operates on.
 function withAlpha(hexColor, alpha){
   const hex = hexColor.replace('#', '');
   const r = parseInt(hex.substring(0, 2), 16);
@@ -183,18 +187,24 @@ function makeInitialState(){
   };
 }
 
+// Shared by spawnFood (don't drop food on the snake) and gameTick
+// (don't let the snake move onto itself) - both are "is this grid point
+// currently occupied by the snake's body" checks.
+function pointOnSnake(snake, point){
+  return snake.some(function(seg){ return seg.x === point.x && seg.y === point.y; });
+}
+
 function spawnFood(snake){
   while (true){
     const candidate = {
       x: Math.floor(Math.random() * GRID_SIZE),
       y: Math.floor(Math.random() * GRID_SIZE),
     };
-    const collides = snake.some(function(seg){ return seg.x === candidate.x && seg.y === candidate.y; });
-    if (!collides) return candidate;
+    if (!pointOnSnake(snake, candidate)) return candidate;
   }
 }
 
-// ---- AUDIO (synthesized SFX, no external files) --------------------------
+// ---- 3. AUDIO (synthesized SFX, no external files) -----------------------
 let audioCtx = null;
 
 function getAudioCtx(){
@@ -204,17 +214,28 @@ function getAudioCtx(){
 }
 
 // A tanh waveshaper is a cheap, convincing stand-in for the fuzz/distortion
-// pedals that give punk guitar its snarl.
-function makeDistortion(amount){
-  const ctxA = getAudioCtx();
-  const shaper = ctxA.createWaveShaper();
-  const n = 4096;
-  const curve = new Float32Array(n);
-  for (let i = 0; i < n; i++){
-    const x = (i * 2) / n - 1;
-    curve[i] = Math.tanh(x * amount);
+// pedals that give punk guitar its snarl. The curve only depends on `amount`,
+// and we only ever call this with a handful of fixed amounts, so cache each
+// curve the first time it's built instead of recomputing 4096 tanh() calls
+// on every single SFX trigger.
+const distortionCurveCache = new Map();
+
+function getDistortionCurve(amount){
+  if (!distortionCurveCache.has(amount)){
+    const n = 4096;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++){
+      const x = (i * 2) / n - 1;
+      curve[i] = Math.tanh(x * amount);
+    }
+    distortionCurveCache.set(amount, curve);
   }
-  shaper.curve = curve;
+  return distortionCurveCache.get(amount);
+}
+
+function makeDistortion(amount){
+  const shaper = getAudioCtx().createWaveShaper();
+  shaper.curve = getDistortionCurve(amount);
   shaper.oversample = '4x';
   return shaper;
 }
@@ -250,19 +271,32 @@ function playTone(freq, duration, opts){
   osc.stop(now + duration + 0.02);
 }
 
+// Every noise burst plays a slice of one shared buffer of white noise,
+// generated once on first use, instead of allocating and re-randomizing a
+// fresh buffer on every eat/death sound. `NOISE_BUFFER_SECONDS` just needs
+// to be at least as long as the longest burst we ever play.
+const NOISE_BUFFER_SECONDS = 1;
+let noiseBuffer = null;
+
+function getNoiseBuffer(ctxA){
+  if (!noiseBuffer){
+    const length = Math.floor(ctxA.sampleRate * NOISE_BUFFER_SECONDS);
+    noiseBuffer = ctxA.createBuffer(1, length, ctxA.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < length; i++){
+      data[i] = Math.random() * 2 - 1;
+    }
+  }
+  return noiseBuffer;
+}
+
 function playNoiseBurst(duration, opts){
   opts = opts || {};
   const ctxA = getAudioCtx();
   const now = ctxA.currentTime;
-  const bufferSize = Math.floor(ctxA.sampleRate * duration);
-  const buffer = ctxA.createBuffer(1, bufferSize, ctxA.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < bufferSize; i++){
-    data[i] = Math.random() * 2 - 1;
-  }
 
   const src = ctxA.createBufferSource();
-  src.buffer = buffer;
+  src.buffer = getNoiseBuffer(ctxA);
 
   const filter = ctxA.createBiquadFilter();
   filter.type = opts.filterType || 'lowpass';
@@ -280,8 +314,22 @@ function playNoiseBurst(duration, opts){
   filter.connect(gain);
   gain.connect(ctxA.destination);
 
-  src.start(now);
+  // `duration` here (the 3rd start() arg) plays only a slice of the shared
+  // buffer, even though the buffer itself is a full second long.
+  src.start(now, 0, duration);
   src.stop(now + duration + 0.02);
+}
+
+// Plays a melody: one entry of `notes` every `spacingMs`, each rendered by
+// playTone() for `duration` seconds. `makeOpts(freq, i)` returns the
+// playTone() options for that note, so eat/death can each vary gain, pitch
+// glide, etc. per note while sharing the same scheduling mechanics.
+function playNoteSequence(notes, spacingMs, duration, makeOpts){
+  notes.forEach(function(freq, i){
+    setTimeout(function(){
+      playTone(freq, duration, makeOpts(freq, i));
+    }, i * spacingMs);
+  });
 }
 
 function playMoveSfx(){
@@ -290,11 +338,8 @@ function playMoveSfx(){
 
 function playEatSfx(){
   // bright ascending triad (C5-E5-A5), each note punchier than the last
-  const notes = [523.25, 659.25, 880];
-  notes.forEach(function(freq, i){
-    setTimeout(function(){
-      playTone(freq, 0.09, { type: 'square', gain: 0.16 + i * 0.04, distort: 5 });
-    }, i * 55);
+  playNoteSequence([523.25, 659.25, 880], 55, 0.09, function(freq, i){
+    return { type: 'square', gain: 0.16 + i * 0.04, distort: 5 };
   });
   // high shimmer on top for extra sparkle
   setTimeout(function(){
@@ -312,15 +357,12 @@ function playDeathSfx(){
 
   // extended 3-note descending "sad trombone" failure motif, each note
   // sagging further downward as it decays
-  const notes = [220, 174.61, 110];
-  notes.forEach(function(freq, i){
-    setTimeout(function(){
-      playTone(freq, 0.32, { type: 'sawtooth', gain: 0.22, distort: 8, glideTo: freq * 0.7 });
-    }, i * 170);
+  playNoteSequence([220, 174.61, 110], 170, 0.32, function(freq){
+    return { type: 'sawtooth', gain: 0.22, distort: 8, glideTo: freq * 0.7 };
   });
 }
 
-// ---- 3. INPUT ----------------------------------------------------------
+// ---- 4. INPUT ------------------------------------------------------------
 const DIRS = {
   ArrowUp:    { x: 0, y: -1 }, w: { x: 0, y: -1 },
   ArrowDown:  { x: 0, y: 1 },  s: { x: 0, y: 1 },
@@ -349,7 +391,7 @@ function togglePause(){
   state.paused = !state.paused;
 }
 
-// ---- 4. UPDATE (the game loop) -----------------------------------------
+// ---- 5. UPDATE (the game loop) -------------------------------------------
 let tickHandle = null;
 
 function scheduleNextTick(){
@@ -367,7 +409,7 @@ function gameTick(){
   const newHead = { x: head.x + state.dir.x, y: head.y + state.dir.y };
 
   const hitWall = newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE;
-  const hitSelf = state.snake.some(function(seg){ return seg.x === newHead.x && seg.y === newHead.y; });
+  const hitSelf = pointOnSnake(state.snake, newHead);
 
   if (hitWall || hitSelf){
     endGame(hitWall ? 'You ran into the wall.' : 'You ran into your own tail.');
@@ -381,7 +423,7 @@ function gameTick(){
     state.score += 1;
     scoreEl.textContent = state.score;
     state.food = spawnFood(state.snake);
-    playEatSfx();
+    playEatSfx(); // AUDIO reacting to this state transition
 
     if (state.score % SPEEDUP_EVERY === 0){
       state.tickMs = Math.max(MIN_TICK_MS, Math.round(state.tickMs * SPEEDUP_FACTOR));
@@ -389,7 +431,7 @@ function gameTick(){
     }
   } else {
     state.snake.pop();
-    playMoveSfx();
+    playMoveSfx(); // AUDIO reacting to this state transition
   }
 
   scheduleNextTick();
@@ -402,7 +444,7 @@ function endGame(reason){
   bestEl.textContent = best;
   deathReason.textContent = reason;
   deathOverlay.classList.add('show');
-  playDeathSfx();
+  playDeathSfx(); // AUDIO reacting to this state transition
 }
 
 function startRun(){
@@ -412,7 +454,7 @@ function startRun(){
   speedEl.textContent = '1.0x';
   startOverlay.classList.remove('show');
   deathOverlay.classList.remove('show');
-  playStartSfx();
+  playStartSfx(); // AUDIO reacting to this state transition
   scheduleNextTick();
   requestAnimationFrame(renderLoop);
 }
@@ -420,7 +462,7 @@ function startRun(){
 document.getElementById('startBtn').addEventListener('click', startRun);
 document.getElementById('retryBtn').addEventListener('click', startRun);
 
-// ---- 5. RENDER -----------------------------------------------------------
+// ---- 6. RENDER -------------------------------------------------------------
 function renderLoop(){
   draw();
   if (state && state.running){
@@ -444,6 +486,10 @@ function draw(){
   });
 }
 
+// Drawn in canvas (not a CSS background) so the lines land exactly on cell
+// boundaries using the same GRID_SIZE/CELL math as the snake and food -
+// a CSS grid image is tiled independently and drifts out of alignment
+// whenever the canvas gets stretched to fit its container.
 function drawGrid(){
   ctx.strokeStyle = GRID_LINE_COLOR;
   ctx.lineWidth = 1;
