@@ -131,7 +131,19 @@ canvas.width = GRID_SIZE * CELL;
 canvas.height = GRID_SIZE * CELL;
 document.getElementById('gridInfo').textContent = GRID_SIZE + '\u00d7' + GRID_SIZE;
 
-const GRID_LINE_COLOR = getComputedStyle(document.documentElement).getPropertyValue('--grid-line').trim();
+const rootStyle = getComputedStyle(document.documentElement);
+const GRID_LINE_COLOR = rootStyle.getPropertyValue('--grid-line').trim();
+const SNAKE_HEAD_COLOR = rootStyle.getPropertyValue('--phosphor-bright').trim();
+const SNAKE_BODY_COLOR = rootStyle.getPropertyValue('--phosphor').trim();
+const FOOD_COLOR = rootStyle.getPropertyValue('--amber').trim();
+
+function withAlpha(hexColor, alpha){
+  const hex = hexColor.replace('#', '');
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
 
 const scoreEl = document.getElementById('score');
 const bestEl  = document.getElementById('best');
@@ -284,13 +296,13 @@ function draw(){
   drawGrid();
   if (!state) return;
 
-  drawCell(state.food.x, state.food.y, '#fff200', true);
+  drawCell(state.food.x, state.food.y, FOOD_COLOR, true);
 
   state.snake.forEach(function(seg, i){
     const isHead = i === 0;
     const t = i / Math.max(1, state.snake.length - 1);
     const alpha = 1 - t * 0.55;
-    const color = isHead ? '#fff200' : ('rgba(255,31,109,' + alpha + ')');
+    const color = isHead ? SNAKE_HEAD_COLOR : withAlpha(SNAKE_BODY_COLOR, alpha);
     drawCell(seg.x, seg.y, color, false);
   });
 }
