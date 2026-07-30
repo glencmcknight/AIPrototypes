@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<!-- saved from url=(0046)file:///C:/Projects/AI_Coding/Snake/snake.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<title>SNAKE // terminal prototype</title>
+<style>
+  :root{
+    --bg: #0a0e0a;
+    --panel: #0f1710;
+    --grid-line: #132014;
+    --phosphor: #4dff88;
+    --phosphor-dim: #1f7a44;
+    --phosphor-bright: #b6ffcf;
+    --amber: #ffb454;
+    --danger: #ff5c5c;
+    --font-mono: 'Courier New', ui-monospace, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body{
+    margin:0; padding:0; background: var(--bg); color: var(--phosphor);
+    font-family: var(--font-mono); min-height: 100%;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .terminal{
+    position:relative; width: 620px; max-width: 94vw;
+    padding: 22px 24px 26px; background: var(--panel);
+    border: 1px solid var(--phosphor-dim); border-radius: 4px;
+    box-shadow: 0 0 0 1px rgba(77,255,136,0.05), 0 0 40px rgba(77,255,136,0.08), inset 0 0 60px rgba(0,0,0,0.6);
+  }
+  .terminal::before{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.18) 3px);
+    border-radius: 4px; mix-blend-mode: multiply;
+  }
+  .topline{ display:flex; justify-content:space-between; align-items:baseline; font-size:12px; letter-spacing: 0.08em; color: var(--phosphor-dim); margin-bottom: 6px; text-transform: uppercase; }
+  h1{ margin: 0 0 2px; font-size: 22px; letter-spacing: 0.12em; color: var(--phosphor-bright); text-shadow: 0 0 8px rgba(77,255,136,0.5); }
+  .subtitle{ font-size: 11px; color: var(--phosphor-dim); margin-bottom: 16px; letter-spacing: 0.04em; }
+  .hud{ display:flex; justify-content:space-between; align-items:center; font-size: 13px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed var(--grid-line); }
+  .hud span.label{ color: var(--phosphor-dim); }
+  .hud span.value{ color: var(--phosphor-bright); }
+  #best.value{ color: var(--amber); }
+  canvas{
+    display:block; width: 100%; aspect-ratio: 1 / 1;
+    background: linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 28px 28px,
+                linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 28px 28px, #060906;
+    border: 1px solid var(--grid-line); border-radius: 2px; image-rendering: pixelated;
+  }
+  .footline{ display:flex; justify-content:space-between; margin-top: 12px; font-size: 11px; color: var(--phosphor-dim); letter-spacing: 0.03em; }
+  .overlay{
+    position:absolute; inset: 0; display:none; align-items:center; justify-content:center;
+    flex-direction:column; gap: 10px; background: rgba(6,9,6,0.86); border-radius: 4px; text-align:center; padding: 20px;
+  }
+  .overlay.show{ display:flex; }
+  .overlay h2{ margin:0; font-size: 20px; letter-spacing:0.1em; color: var(--danger); text-shadow: 0 0 10px rgba(255,92,92,0.5); }
+  .overlay.start h2{ color: var(--phosphor-bright); text-shadow: 0 0 10px rgba(77,255,136,0.5); }
+  .overlay p{ margin:0; font-size: 12px; color: var(--phosphor-dim); max-width: 320px; line-height:1.6; }
+  .key{ display:inline-block; border: 1px solid var(--phosphor-dim); border-radius: 3px; padding: 1px 6px; color: var(--phosphor-bright); font-size: 11px; }
+  button.go{
+    margin-top: 6px; background: transparent; border: 1px solid var(--phosphor); color: var(--phosphor-bright);
+    font-family: var(--font-mono); letter-spacing: 0.08em; font-size: 12px; padding: 8px 18px; border-radius: 3px; cursor: pointer; text-transform: uppercase;
+  }
+  button.go:hover{ background: rgba(77,255,136,0.1); box-shadow: 0 0 12px rgba(77,255,136,0.25); }
+  @media (max-width: 480px){ h1{ font-size:18px; } .hud{ font-size: 12px; } }
+</style>
+</head>
+<body>
+
+<div class="terminal">
+  <div class="topline"><span>SYS/ARCADE.EXE</span><span>REC ●</span></div>
+  <h1>SNAKE</h1>
+  <div class="subtitle">a small, honest game loop — for learning, not shipping</div>
+
+  <div class="hud">
+    <div><span class="label">SCORE </span><span class="value" id="score">2</span></div>
+    <div><span class="label">BEST </span><span class="value" id="best">2</span></div>
+    <div><span class="label">SPEED </span><span class="value" id="speed">1.0x</span></div>
+  </div>
+
+  <div style="position:relative;">
+    <canvas id="board" width="392" height="392"></canvas>
+
+    <div class="overlay start" id="startOverlay">
+      <h2>READY</h2>
+      <p>Arrow keys or <span class="key">WASD</span> to move.<br>Eat the amber dot. Don't hit yourself or the wall.</p>
+      <button class="go" id="startBtn">Start Run</button>
+    </div>
+
+    <div class="overlay show" id="deathOverlay">
+      <h2>RUN ENDED</h2>
+      <p id="deathReason">You ran into the wall.</p>
+      <button class="go" id="retryBtn">Try Again</button>
+    </div>
+  </div>
+
+  <div class="footline">
+    <span>Grid: <span id="gridInfo">14×14</span></span>
+    <span>Pause: <span class="key">SPACE</span></span>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   SNAKE - a deliberately over-commented reference implementation.
+
+   Why over-commented? Because the point of this file isn't just "a game,"
+   it's a map you can hold up against Godot / Unity / Unreal later and go
+   "oh, THIS part is _process(), THIS part is an input map, THIS part is
+   a collision check." The vocabulary changes between engines; the shape
+   of the problem does not.
+
+   Five systems, present in nearly every 2D game you'll ever prototype:
+     1. CONFIG    - tunable numbers, kept separate from logic
+     2. STATE     - the data that fully describes "what's happening now"
+     3. INPUT     - reading intent, decoupled from actually moving
+     4. UPDATE    - turning input + time into new state (the game loop)
+     5. RENDER    - drawing the current state, and only the current state
+   ========================================================================= */
+
+// ---- 1. CONFIG -----------------------------------------------------------
+const GRID_SIZE      = 14;
+const CELL           = 28;
+const START_LENGTH   = 3;
+const BASE_TICK_MS   = 140;
+const SPEEDUP_EVERY  = 5;
+const SPEEDUP_FACTOR = 0.92;
+const MIN_TICK_MS    = 60;
+
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+canvas.width = GRID_SIZE * CELL;
+canvas.height = GRID_SIZE * CELL;
+document.getElementById('gridInfo').textContent = GRID_SIZE + '\u00d7' + GRID_SIZE;
+
+const scoreEl = document.getElementById('score');
+const bestEl  = document.getElementById('best');
+const speedEl = document.getElementById('speed');
+const startOverlay = document.getElementById('startOverlay');
+const deathOverlay = document.getElementById('deathOverlay');
+const deathReason  = document.getElementById('deathReason');
+
+let best = 0;
+
+// ---- 2. STATE --------------------------------------------------------------
+let state = null;
+
+function makeInitialState(){
+  const mid = Math.floor(GRID_SIZE / 2);
+  const snake = [];
+  for (let i = 0; i < START_LENGTH; i++){
+    snake.push({ x: mid - i, y: mid });
+  }
+  return {
+    snake,
+    dir: { x: 1, y: 0 },
+    queuedDir: { x: 1, y: 0 },
+    food: spawnFood(snake),
+    score: 0,
+    tickMs: BASE_TICK_MS,
+    running: false,
+    gameOver: false,
+    paused: false,
+  };
+}
+
+function spawnFood(snake){
+  while (true){
+    const candidate = {
+      x: Math.floor(Math.random() * GRID_SIZE),
+      y: Math.floor(Math.random() * GRID_SIZE),
+    };
+    const collides = snake.some(function(seg){ return seg.x === candidate.x && seg.y === candidate.y; });
+    if (!collides) return candidate;
+  }
+}
+
+// ---- 3. INPUT ----------------------------------------------------------
+const DIRS = {
+  ArrowUp:    { x: 0, y: -1 }, w: { x: 0, y: -1 },
+  ArrowDown:  { x: 0, y: 1 },  s: { x: 0, y: 1 },
+  ArrowLeft:  { x: -1, y: 0 }, a: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 },  d: { x: 1, y: 0 },
+};
+
+window.addEventListener('keydown', function(e){
+  if (e.key === ' '){
+    e.preventDefault();
+    togglePause();
+    return;
+  }
+  const wanted = DIRS[e.key] || DIRS[e.key.toLowerCase()];
+  if (!wanted || !state || !state.running || state.paused) return;
+
+  const isReversal = wanted.x === -state.dir.x && wanted.y === -state.dir.y;
+  if (!isReversal){
+    state.queuedDir = wanted;
+    e.preventDefault();
+  }
+});
+
+function togglePause(){
+  if (!state || !state.running || state.gameOver) return;
+  state.paused = !state.paused;
+}
+
+// ---- 4. UPDATE (the game loop) -----------------------------------------
+let tickHandle = null;
+
+function scheduleNextTick(){
+  clearTimeout(tickHandle);
+  tickHandle = setTimeout(gameTick, state.tickMs);
+}
+
+function gameTick(){
+  if (!state.running || state.gameOver){ return; }
+  if (state.paused){ scheduleNextTick(); return; }
+
+  state.dir = state.queuedDir;
+
+  const head = state.snake[0];
+  const newHead = { x: head.x + state.dir.x, y: head.y + state.dir.y };
+
+  const hitWall = newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE;
+  const hitSelf = state.snake.some(function(seg){ return seg.x === newHead.x && seg.y === newHead.y; });
+
+  if (hitWall || hitSelf){
+    endGame(hitWall ? 'You ran into the wall.' : 'You ran into your own tail.');
+    return;
+  }
+
+  state.snake.unshift(newHead);
+
+  const ateFood = newHead.x === state.food.x && newHead.y === state.food.y;
+  if (ateFood){
+    state.score += 1;
+    scoreEl.textContent = state.score;
+    state.food = spawnFood(state.snake);
+
+    if (state.score % SPEEDUP_EVERY === 0){
+      state.tickMs = Math.max(MIN_TICK_MS, Math.round(state.tickMs * SPEEDUP_FACTOR));
+      speedEl.textContent = (BASE_TICK_MS / state.tickMs).toFixed(1) + 'x';
+    }
+  } else {
+    state.snake.pop();
+  }
+
+  scheduleNextTick();
+}
+
+function endGame(reason){
+  state.running = false;
+  state.gameOver = true;
+  best = Math.max(best, state.score);
+  bestEl.textContent = best;
+  deathReason.textContent = reason;
+  deathOverlay.classList.add('show');
+}
+
+function startRun(){
+  state = makeInitialState();
+  state.running = true;
+  scoreEl.textContent = 0;
+  speedEl.textContent = '1.0x';
+  startOverlay.classList.remove('show');
+  deathOverlay.classList.remove('show');
+  scheduleNextTick();
+  requestAnimationFrame(renderLoop);
+}
+
+document.getElementById('startBtn').addEventListener('click', startRun);
+document.getElementById('retryBtn').addEventListener('click', startRun);
+
+// ---- 5. RENDER -----------------------------------------------------------
+function renderLoop(){
+  draw();
+  if (state && state.running){
+    requestAnimationFrame(renderLoop);
+  }
+}
+
+function draw(){
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!state) return;
+
+  drawCell(state.food.x, state.food.y, '#ffb454', true);
+
+  state.snake.forEach(function(seg, i){
+    const isHead = i === 0;
+    const t = i / Math.max(1, state.snake.length - 1);
+    const alpha = 1 - t * 0.55;
+    const color = isHead ? '#b6ffcf' : ('rgba(77,255,136,' + alpha + ')');
+    drawCell(seg.x, seg.y, color, false);
+  });
+}
+
+function drawCell(gx, gy, color, glow){
+  const x = gx * CELL, y = gy * CELL;
+  ctx.fillStyle = color;
+  if (glow){
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+  } else {
+    ctx.shadowBlur = 0;
+  }
+  const pad = 2;
+  ctx.fillRect(x + pad, y + pad, CELL - pad * 2, CELL - pad * 2);
+  ctx.shadowBlur = 0;
+}
+
+state = makeInitialState();
+draw();
+</script>
+
+
+</body></html>
