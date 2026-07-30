@@ -1,4 +1,4 @@
-# AIPrototypes
+# Prototypes And Experiments
 
 A portfolio of small HTML game prototypes, each paired with a design log
 explaining the intent behind it — the question being explored, the
