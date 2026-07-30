@@ -194,6 +194,132 @@ function spawnFood(snake){
   }
 }
 
+// ---- AUDIO (synthesized SFX, no external files) --------------------------
+let audioCtx = null;
+
+function getAudioCtx(){
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+// A tanh waveshaper is a cheap, convincing stand-in for the fuzz/distortion
+// pedals that give punk guitar its snarl.
+function makeDistortion(amount){
+  const ctxA = getAudioCtx();
+  const shaper = ctxA.createWaveShaper();
+  const n = 4096;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++){
+    const x = (i * 2) / n - 1;
+    curve[i] = Math.tanh(x * amount);
+  }
+  shaper.curve = curve;
+  shaper.oversample = '4x';
+  return shaper;
+}
+
+function playTone(freq, duration, opts){
+  opts = opts || {};
+  const ctxA = getAudioCtx();
+  const now = ctxA.currentTime;
+  const osc = ctxA.createOscillator();
+  const gain = ctxA.createGain();
+
+  osc.type = opts.type || 'square';
+  osc.frequency.setValueAtTime(freq, now);
+  if (opts.glideTo){
+    osc.frequency.exponentialRampToValueAtTime(opts.glideTo, now + duration);
+  }
+
+  const peak = opts.gain != null ? opts.gain : 0.2;
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(peak, now + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+  if (opts.distort){
+    const shaper = makeDistortion(opts.distort);
+    osc.connect(shaper);
+    shaper.connect(gain);
+  } else {
+    osc.connect(gain);
+  }
+  gain.connect(ctxA.destination);
+
+  osc.start(now);
+  osc.stop(now + duration + 0.02);
+}
+
+function playNoiseBurst(duration, opts){
+  opts = opts || {};
+  const ctxA = getAudioCtx();
+  const now = ctxA.currentTime;
+  const bufferSize = Math.floor(ctxA.sampleRate * duration);
+  const buffer = ctxA.createBuffer(1, bufferSize, ctxA.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++){
+    data[i] = Math.random() * 2 - 1;
+  }
+
+  const src = ctxA.createBufferSource();
+  src.buffer = buffer;
+
+  const filter = ctxA.createBiquadFilter();
+  filter.type = opts.filterType || 'lowpass';
+  filter.frequency.setValueAtTime(opts.filterFreqStart || 4000, now);
+  if (opts.filterFreqEnd != null){
+    filter.frequency.exponentialRampToValueAtTime(opts.filterFreqEnd, now + duration);
+  }
+
+  const gain = ctxA.createGain();
+  const peak = opts.gain != null ? opts.gain : 0.3;
+  gain.gain.setValueAtTime(peak, now);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctxA.destination);
+
+  src.start(now);
+  src.stop(now + duration + 0.02);
+}
+
+function playMoveSfx(){
+  playTone(160 + Math.random() * 40, 0.035, { type: 'square', gain: 0.05 });
+}
+
+function playEatSfx(){
+  // bright ascending triad (C5-E5-A5), each note punchier than the last
+  const notes = [523.25, 659.25, 880];
+  notes.forEach(function(freq, i){
+    setTimeout(function(){
+      playTone(freq, 0.09, { type: 'square', gain: 0.16 + i * 0.04, distort: 5 });
+    }, i * 55);
+  });
+  // high shimmer on top for extra sparkle
+  setTimeout(function(){
+    playNoiseBurst(0.1, { gain: 0.12, filterType: 'highpass', filterFreqStart: 6000, filterFreqEnd: 9000 });
+  }, 150);
+}
+
+function playStartSfx(){
+  playTone(110,    0.25, { type: 'sawtooth', gain: 0.22, distort: 6 });
+  playTone(164.81, 0.25, { type: 'sawtooth', gain: 0.16, distort: 6 });
+}
+
+function playDeathSfx(){
+  playNoiseBurst(0.4, { gain: 0.28, filterFreqStart: 3500, filterFreqEnd: 200 });
+
+  // extended 3-note descending "sad trombone" failure motif, each note
+  // sagging further downward as it decays
+  const notes = [220, 174.61, 110];
+  notes.forEach(function(freq, i){
+    setTimeout(function(){
+      playTone(freq, 0.32, { type: 'sawtooth', gain: 0.22, distort: 8, glideTo: freq * 0.7 });
+    }, i * 170);
+  });
+}
+
 // ---- 3. INPUT ----------------------------------------------------------
 const DIRS = {
   ArrowUp:    { x: 0, y: -1 }, w: { x: 0, y: -1 },
@@ -255,6 +381,7 @@ function gameTick(){
     state.score += 1;
     scoreEl.textContent = state.score;
     state.food = spawnFood(state.snake);
+    playEatSfx();
 
     if (state.score % SPEEDUP_EVERY === 0){
       state.tickMs = Math.max(MIN_TICK_MS, Math.round(state.tickMs * SPEEDUP_FACTOR));
@@ -262,6 +389,7 @@ function gameTick(){
     }
   } else {
     state.snake.pop();
+    playMoveSfx();
   }
 
   scheduleNextTick();
@@ -274,6 +402,7 @@ function endGame(reason){
   bestEl.textContent = best;
   deathReason.textContent = reason;
   deathOverlay.classList.add('show');
+  playDeathSfx();
 }
 
 function startRun(){
@@ -283,6 +412,7 @@ function startRun(){
   speedEl.textContent = '1.0x';
   startOverlay.classList.remove('show');
   deathOverlay.classList.remove('show');
+  playStartSfx();
   scheduleNextTick();
   requestAnimationFrame(renderLoop);
 }
