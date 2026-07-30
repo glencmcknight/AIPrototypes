@@ -7,12 +7,11 @@
 <link rel="stylesheet" href="shared/style.css">
 <style>
   .hero {
-    padding: 64px 0 56px;
+    padding: 72px 0 56px;
   }
   .hero h1 {
-    font-size: clamp(2rem, 5vw, 3.2rem);
-    margin-top: 14px;
-    line-height: 1.15;
+    font-size: clamp(2.4rem, 6vw, 4rem);
+    margin-top: 16px;
   }
   .hero p.lede {
     font-family: var(--sans);
@@ -23,7 +22,8 @@
   }
   .philosophy {
     margin-top: 28px;
-    font-family: var(--mono);
+    font-family: var(--sans);
+    font-weight: 500;
     font-size: 0.85rem;
     color: var(--accent);
     letter-spacing: 0.02em;
@@ -41,9 +41,15 @@
     flex-direction: column;
     justify-content: space-between;
     min-height: 220px;
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+  }
+  .card:not(.placeholder):hover {
+    box-shadow: 0 4px 8px rgba(32, 31, 29, 0.06), 0 16px 32px rgba(32, 31, 29, 0.1);
+    transform: translateY(-2px);
   }
   .card .status {
-    font-family: var(--mono);
+    font-family: var(--sans);
+    font-weight: 600;
     font-size: 0.7rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -68,16 +74,15 @@
   }
 
   .card.placeholder {
-    border-style: dashed;
+    border: 1px dashed var(--border);
+    box-shadow: none;
     align-items: center;
     justify-content: center;
     text-align: center;
     color: var(--text-dim);
-    font-family: var(--mono);
+    font-family: var(--sans);
     font-size: 0.85rem;
   }
-  .card.placeholder::before,
-  .card.placeholder::after { border-color: var(--grid-line); }
 </style>
 </head>
 <body>
