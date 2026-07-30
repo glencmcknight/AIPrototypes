@@ -13,9 +13,17 @@
     --phosphor-bright: #fff200;
     --amber: #fff200;
     --danger: #ff2b2b;
-    --obstacle: #8a8a92;
     --font-mono: 'Courier New', ui-monospace, Menlo, Consolas, monospace;
     --font-punk: 'Arial Black', 'Impact', Haettenschweiler, sans-serif;
+
+    /* One tunable color per tetromino obstacle shape - tweak freely. */
+    --tetromino-i: #4dd9ff;
+    --tetromino-o: #ffe14d;
+    --tetromino-t: #b26bff;
+    --tetromino-s: #6bff8f;
+    --tetromino-z: #ff5c5c;
+    --tetromino-j: #5c8fff;
+    --tetromino-l: #ff9f40;
   }
   * { box-sizing: border-box; }
   html, body{
@@ -89,7 +97,7 @@
 
     <div class="overlay start show" id="startOverlay">
       <h2>READY</h2>
-      <p>Arrow keys or <span class="key">WASD</span> to move.<br>Eat the amber dot. Don't hit yourself, the wall, or the gray obstacles that show up as you score.</p>
+      <p>Arrow keys or <span class="key">WASD</span> to move.<br>Eat the amber dot. Don't hit yourself, the wall, or the gray obstacles that show up as you score.<br>The board starts small and grows outward with every bite.</p>
       <button class="go" id="startBtn">Start Run</button>
     </div>
 
@@ -127,30 +135,60 @@
    ========================================================================= */
 
 // ---- 1. CONFIG -----------------------------------------------------------
-const GRID_SIZE      = 20;
+// GRID_SIZE is a `let`, not a `const`: the board starts small and grows
+// as the game is played (see growGrid, in UPDATE), so it's the one CONFIG
+// value that changes during a run instead of staying fixed.
+let GRID_SIZE = 8;
+const STARTING_GRID_SIZE = 8;
+
+// Every time food is eaten, the board grows by this many cells total -
+// split evenly between the two sides of each axis (see growGrid) so it
+// expands outward symmetrically instead of just to the bottom-right.
+const GRID_GROWTH_PER_FOOD = 2;
+
 const CELL           = 28;
 const START_LENGTH   = 3;
-const BASE_TICK_MS   = 140;
+const BASE_TICK_MS   = 160;
 const SPEEDUP_EVERY  = 5;
 const SPEEDUP_FACTOR = 0.92;
 const MIN_TICK_MS    = 60;
 
-const OBSTACLE_EVERY       = 5;   // spawn one more obstacle every N points scored
 const OBSTACLE_HEAD_MARGIN = 3;   // obstacles can't spawn within this many cells of the head
 const MAX_OBSTACLE_ATTEMPTS = 200; // give up looking for a spot if the board's too crowded
+const OBSTACLES_INCREASE_EVERY = 5; // one more obstacle spawns per eat every N points scored
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
-canvas.width = GRID_SIZE * CELL;
-canvas.height = GRID_SIZE * CELL;
-document.getElementById('gridInfo').textContent = GRID_SIZE + '\u00d7' + GRID_SIZE;
+
+// Resizes the canvas element to match the current GRID_SIZE and keeps the
+// footline label in sync. The canvas's on-screen CSS size stays fixed
+// (see the `canvas` rule in <style>), so raising its pixel resolution here
+// makes each cell render smaller without moving anything - that's the
+// "camera zooming out" effect growGrid relies on.
+function syncCanvasSize(){
+  canvas.width = GRID_SIZE * CELL;
+  canvas.height = GRID_SIZE * CELL;
+  document.getElementById('gridInfo').textContent = GRID_SIZE + '\u00d7' + GRID_SIZE;
+}
+
+syncCanvasSize();
 
 const rootStyle = getComputedStyle(document.documentElement);
 const GRID_LINE_COLOR = rootStyle.getPropertyValue('--grid-line').trim();
 const SNAKE_HEAD_COLOR = rootStyle.getPropertyValue('--phosphor-bright').trim();
 const SNAKE_BODY_COLOR = rootStyle.getPropertyValue('--phosphor').trim();
 const FOOD_COLOR = rootStyle.getPropertyValue('--amber').trim();
-const OBSTACLE_COLOR = rootStyle.getPropertyValue('--obstacle').trim();
+
+// One color per tetromino shape, read from the tunable CSS variables above.
+const TETROMINO_COLORS = {
+  I: rootStyle.getPropertyValue('--tetromino-i').trim(),
+  O: rootStyle.getPropertyValue('--tetromino-o').trim(),
+  T: rootStyle.getPropertyValue('--tetromino-t').trim(),
+  S: rootStyle.getPropertyValue('--tetromino-s').trim(),
+  Z: rootStyle.getPropertyValue('--tetromino-z').trim(),
+  J: rootStyle.getPropertyValue('--tetromino-j').trim(),
+  L: rootStyle.getPropertyValue('--tetromino-l').trim(),
+};
 
 // Used by RENDER to fade the snake's body toward its tail; lives here next
 // to the color constants it operates on.
@@ -180,7 +218,9 @@ function makeInitialState(){
   for (let i = 0; i < START_LENGTH; i++){
     snake.push({ x: mid - i, y: mid });
   }
-  const obstacles = []; // each entry is a tetromino: an array of 4 {x,y} cells
+  const obstacles = []; // each entry is { shape, cells }: shape is one of
+                         // I/O/T/S/Z/J/L (picks its render color), cells is
+                         // that tetromino's 4 {x,y} points
   return {
     snake,
     dir: { x: 1, y: 0 },
@@ -210,8 +250,15 @@ function pointOnSnake(snake, point){
   return pointInList(snake, point);
 }
 
+// Obstacles are stored as { shape, cells } so RENDER can look up each
+// shape's color; this flattens them back down to a plain list of cells for
+// the overlap checks (food spawning, obstacle spawning, and collisions).
+function allObstacleCells(obstacles){
+  return obstacles.flatMap(function(obstacle){ return obstacle.cells; });
+}
+
 function spawnFood(snake, obstacles){
-  const obstacleCells = obstacles.flat();
+  const obstacleCells = allObstacleCells(obstacles);
   while (true){
     const candidate = {
       x: Math.floor(Math.random() * GRID_SIZE),
@@ -264,7 +311,7 @@ function randomlyRotatedShape(baseCells){
 // case the caller just skips adding one this round.
 function spawnObstacle(currentState){
   const head = currentState.snake[0];
-  const obstacleCells = currentState.obstacles.flat();
+  const obstacleCells = allObstacleCells(currentState.obstacles);
   const shapeNames = Object.keys(TETROMINO_SHAPES);
 
   function tooCloseToHead(cell){
@@ -289,7 +336,7 @@ function spawnObstacle(currentState){
     const originY = Math.floor(Math.random() * (GRID_SIZE - height + 1));
     const cells = shape.map(function(c){ return { x: originX + c.x, y: originY + c.y }; });
 
-    if (!cells.some(isBlocked)) return cells;
+    if (!cells.some(isBlocked)) return { shape: shapeName, cells: cells };
   }
   return null;
 }
@@ -467,7 +514,14 @@ window.addEventListener('keydown', function(e){
     return;
   }
   const wanted = DIRS[e.key] || DIRS[e.key.toLowerCase()];
-  if (!wanted || !state || !state.running || state.paused) return;
+  if (!wanted) return;
+
+  if (state && state.gameOver){
+    e.preventDefault();
+    startRun();
+    return;
+  }
+  if (!state || !state.running || state.paused) return;
 
   const isReversal = wanted.x === -state.dir.x && wanted.y === -state.dir.y;
   if (!isReversal){
@@ -482,6 +536,30 @@ function togglePause(){
 }
 
 // ---- 5. UPDATE (the game loop) -------------------------------------------
+
+// Called each time food is eaten. Adds GRID_GROWTH_PER_FOOD cells to the
+// board and pushes every existing snake segment and obstacle cell outward
+// by half that amount on both axes, so the whole layout stays exactly
+// where it was relative to itself - only new empty space appears around
+// the edges. (state.food isn't shifted: it's about to be replaced by a
+// fresh spawnFood() call using the new, larger GRID_SIZE anyway.)
+function growGrid(){
+  const pad = GRID_GROWTH_PER_FOOD / 2;
+  function pushOutward(cell){ cell.x += pad; cell.y += pad; }
+
+  state.snake.forEach(pushOutward);
+  state.obstacles.forEach(function(obstacle){ obstacle.cells.forEach(pushOutward); });
+
+  GRID_SIZE += GRID_GROWTH_PER_FOOD;
+  syncCanvasSize();
+}
+
+// How many obstacles to drop per food eaten at a given score: starts at 1,
+// then gains one more every OBSTACLES_INCREASE_EVERY points.
+function obstaclesPerEat(score){
+  return 1 + Math.floor(score / OBSTACLES_INCREASE_EVERY);
+}
+
 let tickHandle = null;
 
 function scheduleNextTick(){
@@ -500,7 +578,7 @@ function gameTick(){
 
   const hitWall = newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE;
   const hitSelf = pointOnSnake(state.snake, newHead);
-  const hitObstacle = pointInList(state.obstacles.flat(), newHead);
+  const hitObstacle = pointInList(allObstacleCells(state.obstacles), newHead);
 
   if (hitWall || hitSelf || hitObstacle){
     let reason = 'You ran into the wall.';
@@ -516,6 +594,7 @@ function gameTick(){
   if (ateFood){
     state.score += 1;
     scoreEl.textContent = state.score;
+    growGrid();
     state.food = spawnFood(state.snake, state.obstacles);
     playEatSfx(); // AUDIO reacting to this state transition
 
@@ -524,7 +603,7 @@ function gameTick(){
       speedEl.textContent = (BASE_TICK_MS / state.tickMs).toFixed(1) + 'x';
     }
 
-    if (state.score % OBSTACLE_EVERY === 0){
+    for (let i = 0; i < obstaclesPerEat(state.score); i++){
       const obstacle = spawnObstacle(state);
       if (obstacle) state.obstacles.push(obstacle);
     }
@@ -547,6 +626,8 @@ function endGame(reason){
 }
 
 function startRun(){
+  GRID_SIZE = STARTING_GRID_SIZE;
+  syncCanvasSize();
   state = makeInitialState();
   state.running = true;
   scoreEl.textContent = 0;
@@ -575,7 +656,8 @@ function draw(){
   if (!state) return;
 
   state.obstacles.forEach(function(obstacle){
-    obstacle.forEach(function(cell){ drawCell(cell.x, cell.y, OBSTACLE_COLOR, false); });
+    const color = TETROMINO_COLORS[obstacle.shape];
+    obstacle.cells.forEach(function(cell){ drawCell(cell.x, cell.y, color, false); });
   });
 
   drawCell(state.food.x, state.food.y, FOOD_COLOR, true);
