@@ -8,7 +8,26 @@
 <style>
   .header {
     padding: 48px 0 20px;
+    max-width: 960px;
+  }
+  .header-grid {
+    display: flex;
+    gap: 40px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .header-text {
+    flex: 1 1 420px;
     max-width: 680px;
+  }
+  .header-hero {
+    flex: 0 0 200px;
+    width: 200px;
+  }
+  .header-hero img {
+    display: block;
+    width: 100%;
+    box-shadow: 0 1px 2px rgba(32, 31, 29, 0.05), 0 10px 24px rgba(32, 31, 29, 0.07);
   }
   .header h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); margin-top: 12px; }
   .header p.lede {
@@ -50,20 +69,6 @@
     line-height: 1;
     padding-top: 4px;
   }
-
-  .phase-line {
-    position: relative;
-  }
-  .phase-line::before {
-    content: "";
-    position: absolute;
-    left: 27px;
-    top: 44px;
-    bottom: -32px;
-    width: 1px;
-    background: var(--border);
-  }
-  .phase:last-child .phase-line::before { display: none; }
 
   .phase .panel {
     margin-bottom: 32px;
@@ -108,21 +113,28 @@
   </nav>
 
   <section class="header">
-    <div class="eyebrow">Design Log — Prototype 01</div>
-    <h1>Snake: still full of opportunity</h1>
-    <p class="lede">
-      Snake is one of my all-time favorite games, and even decades later it
-      still feels like there's real room to expand and explore within its
-      simple ruleset. That made it a good first project for trying an
-      AI-assisted build — though honestly, the process felt a lot less like
-      "vibe coding" and a lot more like how I already build: small, testable
-      chunks, tunable variables, and a lot of playing what I've made before
-      deciding what comes next.
-    </p>
-    <div class="meta-row">
-      <div><b>Approach</b>Build small → play → consider → expand</div>
-      <div><b>Usually built in</b>Flash/ActionScript (past), Unreal Blueprint (now)</div>
-      <div><b>This build</b>HTML / Canvas, with Claude</div>
+    <div class="header-grid">
+      <div class="header-text">
+        <div class="eyebrow">Design Log — Prototype 01</div>
+        <h1>Snake: still full of opportunity</h1>
+        <p class="lede">
+          Snake is one of my all-time favorite games, and even decades later it
+          still feels like there's real room to expand and explore within its
+          simple ruleset. That made it a good first project for trying an
+          AI-assisted build — though honestly, the process felt a lot less like
+          "vibe coding" and a lot more like how I already build: small, testable
+          chunks, tunable variables, and a lot of playing what I've made before
+          deciding what comes next.
+        </p>
+        <div class="meta-row">
+          <div><b>Approach</b>Build small → play → consider → expand</div>
+          <div><b>Usually built in</b>Flash/ActionScript (past), Unreal Blueprint (now)</div>
+          <div><b>This build</b>HTML / Canvas, with Claude</div>
+        </div>
+      </div>
+      <div class="header-hero">
+        <img src="assets/hero.jpg" alt="World of Snakes retro box art">
+      </div>
     </div>
   </section>
 
@@ -130,7 +142,7 @@
 
     <div class="phase">
       <div class="phase-num">01</div>
-      <div class="phase-line">
+      <div class="phase-body">
         <div class="panel">
           <div class="tag">Shipped</div>
           <h3>Get it functional, get it familiar</h3>
@@ -153,7 +165,7 @@
 
     <div class="phase">
       <div class="phase-num">02</div>
-      <div class="phase-line">
+      <div class="phase-body">
         <div class="panel">
           <div class="tag">Shipped</div>
           <h3>Obstacles: interrupt the default loop</h3>
@@ -171,7 +183,7 @@
 
     <div class="phase">
       <div class="phase-num">03</div>
-      <div class="phase-line">
+      <div class="phase-body">
         <div class="panel">
           <div class="tag">Shipped</div>
           <h3>A world that grows</h3>
@@ -189,7 +201,7 @@
 
     <div class="phase future">
       <div class="phase-num">04</div>
-      <div class="phase-line">
+      <div class="phase-body">
         <div class="panel">
           <div class="tag">Where I'd take it next</div>
           <h3>Multi-screen, Sokoban-influenced exploration</h3>

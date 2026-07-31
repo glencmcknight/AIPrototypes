@@ -39,13 +39,22 @@
   .card {
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    min-height: 220px;
-    transition: box-shadow 0.15s ease, transform 0.15s ease;
+    padding: 0;
+    overflow: hidden;
   }
-  .card:not(.placeholder):hover {
-    box-shadow: 0 4px 8px rgba(32, 31, 29, 0.06), 0 16px 32px rgba(32, 31, 29, 0.1);
-    transform: translateY(-2px);
+  .card-image {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    object-position: 50% 20%;
+  }
+  .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 24px;
   }
   .card .status {
     font-family: var(--sans);
@@ -76,12 +85,18 @@
   .card.placeholder {
     border: 1px dashed var(--border);
     box-shadow: none;
+    padding: 24px;
+    min-height: 220px;
     align-items: center;
     justify-content: center;
     text-align: center;
     color: var(--text-dim);
     font-family: var(--sans);
     font-size: 0.85rem;
+  }
+  .card.placeholder:hover {
+    box-shadow: none;
+    transform: none;
   }
 </style>
 </head>
@@ -107,17 +122,20 @@
   <section class="grid">
 
     <div class="panel card">
-      <div>
-        <div class="status">Active build</div>
-        <h2>Snake</h2>
-        <p class="tagline">
-          Revisiting a classic loop — obstacles, a growing playfield,
-          and an eye toward multi-screen exploration.
-        </p>
-      </div>
-      <div class="links">
-        <a class="btn" href="games/snake/index.html">Play</a>
-        <a class="btn ghost" href="games/snake/writeup.html">Design Log</a>
+      <img class="card-image" src="games/snake/assets/hero.jpg" alt="World of Snakes retro box art">
+      <div class="card-body">
+        <div>
+          <div class="status">Active build</div>
+          <h2>Snake</h2>
+          <p class="tagline">
+            Revisiting a classic loop — obstacles, a growing playfield,
+            and an eye toward multi-screen exploration.
+          </p>
+        </div>
+        <div class="links">
+          <a class="btn" href="games/snake/index.html">Play</a>
+          <a class="btn ghost" href="games/snake/writeup.html">Design Log</a>
+        </div>
       </div>
     </div>
 
